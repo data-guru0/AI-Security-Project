@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 
 _model = SentenceTransformer("all-MiniLM-L6-v2")
 CACHE_TTL = 3600
-SIMILARITY_THRESHOLD = 0.92
+SIMILARITY_THRESHOLD = 0.85
 CACHE_PREFIX = "semantic:"
 EMB_PREFIX = "emb:"
 

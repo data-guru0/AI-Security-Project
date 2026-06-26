@@ -84,7 +84,10 @@
   </div>
 
   <div class="card">
-    <div class="section-title">Session History</div>
+    <div class="section-title">Session History
+      <button class="btn btn-secondary" style="float:right;font-size:0.8rem;padding:4px 12px" onclick="newSession()">New Session</button>
+    </div>
+    <p style="color:#8b949e;font-size:0.8rem;margin-bottom:12px">Session ID is auto-reused across requests so history builds up. Click "New Session" to start fresh.</p>
     <div id="session-box"><p style="color:#8b949e;font-size:0.85rem">No session active.</p></div>
   </div>
 
@@ -125,6 +128,7 @@
         currentJobId = data.job_id;
         currentSessionId = data.session_id;
         lastTopic = topic;
+        document.getElementById('session-id').value = currentSessionId;
         document.getElementById('job-id-label').textContent = `Job: ${currentJobId}`;
         document.getElementById('job-status').className = 'status status-pending';
         document.getElementById('job-status').textContent = 'Processing...';
@@ -206,10 +210,19 @@
       const resp = await fetch(`${API}/session/${currentSessionId}`);
       const data = await resp.json();
       const box = document.getElementById('session-box');
-      if (!data.messages || data.messages.length === 0) return;
+      if (!data.messages || data.messages.length === 0) {
+        box.innerHTML = '<p style="color:#8b949e;font-size:0.85rem">No messages yet.</p>';
+        return;
+      }
       box.innerHTML = data.messages.map(m =>
-        `<div class="msg msg-${m.role}"><strong>${m.role}</strong>: ${m.content}</div>`
+        `<div class="msg msg-${m.role}"><strong style="text-transform:capitalize">${m.role}</strong>: ${m.content}</div>`
       ).join('');
+    }
+
+    function newSession() {
+      currentSessionId = null;
+      document.getElementById('session-id').value = '';
+      document.getElementById('session-box').innerHTML = '<p style="color:#8b949e;font-size:0.85rem">No session active.</p>';
     }
   </script>
 </body>

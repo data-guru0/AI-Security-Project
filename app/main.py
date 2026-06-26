@@ -167,6 +167,26 @@ async def download_pdf(job_id: str):
                     headers={"Content-Disposition": f"attachment; filename={job_id}.pdf"})
 
 
+@app.get("/stats")
+async def stats():
+    info = await redis_client.info()
+    keys = await redis_client.dbsize()
+    cache_keys = len([k async for k in redis_client.scan_iter("semantic:*")])
+    session_keys = len([k async for k in redis_client.scan_iter("session:*")])
+    return {
+        "redis": {
+            "total_keys": keys,
+            "cache_entries": cache_keys,
+            "active_sessions": session_keys,
+            "memory_used_mb": round(info["used_memory"] / 1024 / 1024, 2),
+            "connected_clients": info["connected_clients"],
+            "uptime_hours": round(info["uptime_in_seconds"] / 3600, 1),
+        },
+        "tensorzero_url": config.tensorzero_url,
+        "guardrail_id": config.bedrock_guardrail_id,
+    }
+
+
 @app.get("/evaluate/{job_id}")
 async def evaluate_job(job_id: str):
     result = await get_result(redis_client, job_id)
