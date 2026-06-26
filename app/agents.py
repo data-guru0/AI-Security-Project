@@ -19,7 +19,7 @@ class ResearchState(TypedDict):
 async def _tz_call(config: Config, function_name: str, user_message: str) -> str:
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
-            f"{config.tensorzero_url}/v1/inference",
+            f"{config.tensorzero_url}/inference",
             json={
                 "function_name": function_name,
                 "input": {"messages": [{"role": "user", "content": user_message}]},
