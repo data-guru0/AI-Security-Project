@@ -1,0 +1,99 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push app image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          APP_REPO: research-agent-app
+        run: |
+          docker build -f app/Dockerfile -t $ECR_REGISTRY/$APP_REPO:$GITHUB_SHA .
+          docker push $ECR_REGISTRY/$APP_REPO:$GITHUB_SHA
+          docker tag $ECR_REGISTRY/$APP_REPO:$GITHUB_SHA $ECR_REGISTRY/$APP_REPO:latest
+          docker push $ECR_REGISTRY/$APP_REPO:latest
+
+      - name: Build and push PyRIT image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          PYRIT_REPO: research-agent-pyrit
+        run: |
+          docker build -f pyrit_dashboard/Dockerfile -t $ECR_REGISTRY/$PYRIT_REPO:$GITHUB_SHA .
+          docker push $ECR_REGISTRY/$PYRIT_REPO:$GITHUB_SHA
+          docker tag $ECR_REGISTRY/$PYRIT_REPO:$GITHUB_SHA $ECR_REGISTRY/$PYRIT_REPO:latest
+          docker push $ECR_REGISTRY/$PYRIT_REPO:latest
+
+      - name: Deploy app to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          APP_REPO: research-agent-app
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition research-agent-app --query taskDefinition)
+          NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
+          import json, sys
+          td = json.load(sys.stdin)
+          td['containerDefinitions'][0]['image'] = '$ECR_REGISTRY/$APP_REPO:$GITHUB_SHA'
+          for key in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']:
+              td.pop(key, None)
+          print(json.dumps(td))
+          ")
+          NEW_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query taskDefinition.taskDefinitionArn --output text)
+          aws ecs update-service \
+            --cluster research-agent-cluster \
+            --service research-agent-app \
+            --task-definition $NEW_ARN \
+            --region $AWS_REGION
+
+      - name: Deploy PyRIT to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          PYRIT_REPO: research-agent-pyrit
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition research-agent-pyrit --query taskDefinition)
+          NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
+          import json, sys
+          td = json.load(sys.stdin)
+          td['containerDefinitions'][0]['image'] = '$ECR_REGISTRY/$PYRIT_REPO:$GITHUB_SHA'
+          for key in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']:
+              td.pop(key, None)
+          print(json.dumps(td))
+          ")
+          NEW_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query taskDefinition.taskDefinitionArn --output text)
+          aws ecs update-service \
+            --cluster research-agent-cluster \
+            --service research-agent-pyrit \
+            --task-definition $NEW_ARN \
+            --region $AWS_REGION
+
+      - name: Wait for app service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster research-agent-cluster \
+            --services research-agent-app \
+            --region $AWS_REGION

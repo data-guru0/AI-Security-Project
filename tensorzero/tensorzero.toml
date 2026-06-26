@@ -1,0 +1,55 @@
+[gateway]
+bind_address = "0.0.0.0:3000"
+
+[models.gpt4o]
+routing = ["openai_gpt4o"]
+
+[models.gpt4o.fallback]
+routing = ["groq_llama3"]
+
+[models.groq_llama3]
+routing = ["groq_llama3"]
+
+[model_providers.openai_gpt4o]
+type = "openai"
+model_name = "gpt-4o"
+
+[model_providers.groq_llama3]
+type = "groq"
+model_name = "llama3-70b-8192"
+
+[functions.research_summarize]
+type = "chat"
+system_schema = { type = "object", properties = {} }
+
+[functions.research_summarize.variants.primary]
+type = "chat_completion"
+model = "gpt4o"
+system_template = "You are a world-class research assistant. Provide accurate, well-sourced, and comprehensive information."
+temperature = 0.3
+max_tokens = 2048
+
+[functions.research_summarize.variants.fallback]
+type = "chat_completion"
+model = "groq_llama3"
+system_template = "You are a research assistant. Provide accurate and comprehensive information."
+temperature = 0.3
+max_tokens = 2048
+
+[functions.report_write]
+type = "chat"
+system_schema = { type = "object", properties = {} }
+
+[functions.report_write.variants.primary]
+type = "chat_completion"
+model = "gpt4o"
+system_template = "You are an expert report writer. Write clear, structured, and professional research reports with executive summaries, key findings, analysis, and actionable conclusions."
+temperature = 0.4
+max_tokens = 4096
+
+[functions.report_write.variants.fallback]
+type = "chat_completion"
+model = "groq_llama3"
+system_template = "You are a report writer. Write clear, structured research reports."
+temperature = 0.4
+max_tokens = 4096
