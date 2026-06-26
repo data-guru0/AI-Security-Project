@@ -64,6 +64,12 @@ jobs:
           print(json.dumps(td))
           ")
           NEW_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query taskDefinition.taskDefinitionArn --output text)
+          for i in $(seq 1 24); do
+            STATUS=$(aws ecs describe-services --cluster research-agent-cluster --services research-agent-app --query 'services[0].status' --output text 2>/dev/null || echo "MISSING")
+            echo "Service status: $STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then break; fi
+            sleep 5
+          done
           aws ecs update-service \
             --cluster research-agent-cluster \
             --service research-agent-app \
@@ -85,6 +91,12 @@ jobs:
           print(json.dumps(td))
           ")
           NEW_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query taskDefinition.taskDefinitionArn --output text)
+          for i in $(seq 1 24); do
+            STATUS=$(aws ecs describe-services --cluster research-agent-cluster --services research-agent-pyrit --query 'services[0].status' --output text 2>/dev/null || echo "MISSING")
+            echo "Service status: $STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then break; fi
+            sleep 5
+          done
           aws ecs update-service \
             --cluster research-agent-cluster \
             --service research-agent-pyrit \
