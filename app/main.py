@@ -1,5 +1,7 @@
 import asyncio
 import uuid
+import logging
+import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
@@ -7,6 +9,9 @@ from fastapi.responses import Response, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import redis.asyncio as aioredis
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from app.config import Config
 from app.cache import cache_get, cache_set
@@ -39,20 +44,28 @@ async def _process_job(data: dict, msg_id: str):
     session_id = data["session_id"]
     output_format = data.get("output_format", "text")
     try:
+        logger.info(f"[{job_id}] Starting processing for topic: {topic}")
+
+        logger.info(f"[{job_id}] Checking semantic cache...")
         cached = await cache_get(redis_client, topic)
         if cached:
+            logger.info(f"[{job_id}] Cache hit")
             report_text = cached
         else:
+            logger.info(f"[{job_id}] Cache miss, checking long-term memory...")
             ltm_hit = await ltm_search(config, topic)
             if ltm_hit:
+                logger.info(f"[{job_id}] LTM hit")
                 report_text = ltm_hit["report"]
             else:
+                logger.info(f"[{job_id}] Running LangGraph agent...")
                 state = ResearchState(
                     topic=topic, session_id=session_id,
                     search_results=[], summaries=[], report="", verified=False, error=""
                 )
                 final_state = await graph.ainvoke(state)
                 report_text = final_state["report"]
+                logger.info(f"[{job_id}] Agent done, validating output...")
                 ok, reason = await validate_output(config, report_text)
                 if not ok:
                     await set_result(redis_client, job_id, {"status": "blocked", "error": reason})
@@ -74,7 +87,9 @@ async def _process_job(data: dict, msg_id: str):
             result["structured"] = generate_json_report(topic, report_text, job_id, datetime.utcnow())
 
         await set_result(redis_client, job_id, result)
+        logger.info(f"[{job_id}] Job completed successfully")
     except Exception as e:
+        logger.error(f"[{job_id}] Job failed: {traceback.format_exc()}")
         await set_result(redis_client, job_id, {"status": "error", "error": str(e)})
     finally:
         await ack_job(redis_client, msg_id)
