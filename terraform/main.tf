@@ -200,6 +200,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_bedrock_guardrail" "main" {
   name                      = "${var.project}-guardrail"
+  description               = "Content safety guardrail for the research agent"
   blocked_input_messaging   = "Your request was blocked by our content safety policy."
   blocked_outputs_messaging = "The generated response was blocked by our content safety policy."
 
@@ -319,7 +320,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "postgres" {
   identifier             = "${var.project}-postgres"
   engine                 = "postgres"
-  engine_version         = "16.2"
+  engine_version         = "15.8"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
   db_name                = "researchdb"
