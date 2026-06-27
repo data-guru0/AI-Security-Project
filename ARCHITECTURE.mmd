@@ -1,0 +1,74 @@
+flowchart TD
+    User(["User / Browser"])
+
+    subgraph CLOUD["AWS Cloud - us-east-1"]
+        ALB["Application Load Balancer\n:80 to App  |  :8001 to PyRIT"]
+
+        subgraph ECS["ECS Fargate Cluster"]
+            subgraph AppTask["App Task - 512 CPU / 1 GB"]
+                FastAPI["FastAPI :8000\nREST API + Worker Loop"]
+                TZero["TensorZero :3000\nLLM Gateway sidecar"]
+            end
+            PyRIT["PyRIT Dashboard :8001\nJailbreak - XPIA - Crescendo - Skeleton Key"]
+        end
+
+        subgraph Pipeline["Job Pipeline - inside FastAPI Worker"]
+            GI["validate_input"] --> Push["push_job - Redis Stream"]
+            Push --> WL["Worker Loop\nconsume_jobs / ack_job"]
+            WL --> SC["Semantic Cache\ncosine sim >= 0.85"]
+            SC -->|miss| LTMS["LTM Search\npgvector sim >= 0.88 - last 7 days"]
+            LTMS -->|miss| AG["LangGraph Agent\nsearch - summarize - write - verify"]
+            AG --> GO["validate_output"]
+            GO -->|pass| STORE["cache_set + ltm_store + session_add"]
+            STORE --> OUT["Output: text / PDF / JSON"]
+            OUT --> EVAL["LLM-as-Judge Eval\nrelevance - completeness - hallucination - quality"]
+        end
+
+        Bedrock["AWS Bedrock Guardrails\nHATE - VIOLENCE - PII - PROMPT_ATTACK\nweapons - illegal_activities - self_harm"]
+        Secrets["Secrets Manager\nresearch-agent/config"]
+        Redis["ElastiCache Redis 7\nSemantic cache - Sessions\nJob queue stream - Results"]
+        PG["RDS PostgreSQL 15 + pgvector\nreports table - ivfflat cosine index\nembedding 384 dim"]
+        ECR["ECR - 3 repos\napp - pyrit - tensorzero"]
+        CW["CloudWatch Logs\n7-day retention"]
+        EB["EventBridge\nweekly cron MON 02:00 UTC"]
+    end
+
+    OpenAI["OpenAI GPT-4o"]
+    Groq["Groq Llama3-70B fallback"]
+    LangSmith["LangSmith\nTracing + Eval Datasets"]
+    ST["SentenceTransformer\nall-MiniLM-L6-v2\n384-dim - runs in-process"]
+    TF["Terraform - terraform/main.tf\nS3 state backend + DynamoDB lock"]
+
+    User -->|HTTP| ALB
+    ALB -->|port 8000| FastAPI
+    ALB -->|port 8001| PyRIT
+    PyRIT -->|red team attacks| ALB
+    EB -->|weekly trigger| PyRIT
+
+    FastAPI --> Pipeline
+    FastAPI <-->|pull secrets at startup| Secrets
+    GI -->|apply_guardrail INPUT| Bedrock
+    GO -->|apply_guardrail OUTPUT| Bedrock
+
+    SC -->|embed query| ST
+    LTMS -->|embed query| ST
+    STORE -->|embed topic| ST
+
+    WL <-->|streams + results| Redis
+    SC <-->|cache read/write| Redis
+    STORE -->|session_add| Redis
+
+    LTMS <-->|vector search| PG
+    STORE -->|INSERT report| PG
+
+    AG -->|POST /inference| TZero
+    EVAL -->|POST /inference| TZero
+    TZero --> OpenAI
+    TZero -->|fallback| Groq
+
+    AG -->|traceable| LangSmith
+    EVAL -->|create_example dataset| LangSmith
+
+    ECR -->|image pull on deploy| ECS
+    ECS --> CW
+    TF -.->|provisions all AWS resources| CLOUD

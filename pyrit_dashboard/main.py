@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 TARGET_URL = os.environ.get("TARGET_URL", "http://app:8000")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 app = FastAPI(title="PyRIT Red Team Dashboard")
 
