@@ -10,7 +10,7 @@ model_name = "gpt-4o"
 
 [models.research_model.providers.groq_fallback]
 type = "groq"
-model_name = "llama3-70b-8192"
+model_name = "openai/gpt-oss-20b"
 
 [functions.research_summarize]
 type = "chat"
